@@ -28,6 +28,9 @@ enum Command {
     Info {
         /// BNL file
         file: PathBuf,
+        /// Emit JSON instead of human-readable text
+        #[arg(long)]
+        json: bool,
     },
     /// Extract a single page from BNL
     Extract {
@@ -47,6 +50,14 @@ enum Command {
         #[arg(short, long)]
         output: PathBuf,
     },
+    /// Validate a BNL archive: structure + decode probe every page
+    Validate {
+        /// BNL file
+        file: PathBuf,
+        /// Emit JSON report instead of human-readable text
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() {
@@ -54,9 +65,10 @@ fn main() {
 
     match cli.command {
         Command::Pack { dir, output, quality, no_cover } => cmd_pack(&dir, &output, quality, !no_cover),
-        Command::Info { file } => cmd_info(&file),
+        Command::Info { file, json } => cmd_info(&file, json),
         Command::Extract { file, page, output } => cmd_extract(&file, page, &output),
         Command::Unpack { file, output } => cmd_unpack(&file, &output),
+        Command::Validate { file, json } => cmd_validate(&file, json),
     }
 }
 
@@ -78,25 +90,56 @@ fn cmd_pack(dir: &PathBuf, output: &PathBuf, quality: u8, cover: bool) {
     }
 }
 
-fn cmd_info(file: &PathBuf) {
+fn cmd_info(file: &PathBuf, json: bool) {
     let data = match std::fs::read(file) {
         Ok(d) => d,
         Err(e) => { eprintln!("error: {e}"); std::process::exit(1); }
     };
     match bunle::read_index(&data) {
         Ok(index) => {
-            let total: u64 = index.pages.iter().map(|p| p.size as u64).sum();
-            println!("BNL v{} — {} pages, {} bytes", index.version, index.pages.len(), data.len());
-            println!("Index size: {} bytes", bunle::MCZIndex::data_offset(index.pages.len() as u16));
-            println!("Data size:  {} bytes", total);
-            println!();
-            for p in &index.pages {
-                println!("  {:>3}: {:>4}×{:<4} {:>4}  offset={:<8} size={}",
-                    p.index, p.width, p.height, p.format, p.offset, p.size);
+            if json {
+                print_info_json(&data, &index);
+            } else {
+                print_info_text(&data, &index);
             }
         }
         Err(e) => { eprintln!("error: {e}"); std::process::exit(1); }
     }
+}
+
+fn print_info_text(data: &[u8], index: &bunle::MCZIndex) {
+    let total: u64 = index.pages.iter().map(|p| p.size as u64).sum();
+    println!("BNL v{} — {} pages, {} bytes", index.version, index.pages.len(), data.len());
+    println!("Index size: {} bytes", bunle::MCZIndex::data_offset(index.pages.len() as u16));
+    println!("Data size:  {} bytes", total);
+    println!();
+    for p in &index.pages {
+        println!("  {:>3}: {:>4}×{:<4} {:>4}  offset={:<8} size={}",
+            p.index, p.width, p.height, p.format, p.offset, p.size);
+    }
+}
+
+fn print_info_json(data: &[u8], index: &bunle::MCZIndex) {
+    let mut out = String::new();
+    out.push('{');
+    out.push_str(&format!("\"version\":{},", index.version));
+    out.push_str(&format!("\"page_count\":{},", index.pages.len()));
+    out.push_str(&format!("\"total_bytes\":{},", data.len()));
+    out.push_str("\"pages\":[");
+    for (i, p) in index.pages.iter().enumerate() {
+        if i > 0 { out.push(','); }
+        let fmt = match p.format {
+            bunle::ImageFormat::WebP => "webp",
+            bunle::ImageFormat::Jpeg => "jpeg",
+            bunle::ImageFormat::Jxl => "jxl",
+        };
+        out.push_str(&format!(
+            "{{\"index\":{},\"width\":{},\"height\":{},\"format\":\"{}\",\"offset\":{},\"size\":{}}}",
+            p.index, p.width, p.height, fmt, p.offset, p.size
+        ));
+    }
+    out.push_str("]}");
+    println!("{out}");
 }
 
 fn cmd_extract(file: &PathBuf, page: usize, output: &PathBuf) {
@@ -130,5 +173,36 @@ fn cmd_unpack(file: &PathBuf, output: &PathBuf) {
             println!("Unpacked {} pages → {}", index.pages.len(), output.display());
         }
         Err(e) => { eprintln!("error: {e}"); std::process::exit(1); }
+    }
+}
+
+fn cmd_validate(file: &PathBuf, json: bool) {
+    let data = match std::fs::read(file) {
+        Ok(d) => d,
+        Err(e) => { eprintln!("error: {e}"); std::process::exit(1); }
+    };
+    match bunle::validate(&data) {
+        Ok(report) => {
+            if json {
+                println!(
+                    "{{\"ok\":true,\"version\":{},\"page_count\":{},\"total_bytes\":{}}}",
+                    report.version, report.page_count, report.total_bytes
+                );
+            } else {
+                println!(
+                    "OK — BNL v{}, {} pages, {} bytes",
+                    report.version, report.page_count, report.total_bytes
+                );
+            }
+        }
+        Err(e) => {
+            if json {
+                let msg = e.to_string().replace('\\', "\\\\").replace('"', "\\\"");
+                println!("{{\"ok\":false,\"error\":\"{msg}\"}}");
+            } else {
+                eprintln!("error: {e}");
+            }
+            std::process::exit(1);
+        }
     }
 }

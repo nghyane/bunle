@@ -1,12 +1,14 @@
 mod format;
 mod pack;
 mod unpack;
+mod validate;
 
 pub use format::{ImageFormat, MCZIndex, PageInfo, ParseError, HEADER_SIZE, INDEX_ENTRY_SIZE, COVER_PREFIX};
-pub use pack::{EncodedPage, pack};
+pub use pack::{EncodedPage, pack, PackError, MAX_PAGES, MAX_PAGE_BYTES, MAX_ARCHIVE_BYTES};
 pub use unpack::{unpack, UnpackError};
+pub use validate::{validate, ValidateError, ValidateReport};
 #[cfg(feature = "cli")]
-pub use pack::{pack_dir, PackError};
+pub use pack::pack_dir;
 
 /// Read index from MCZ data (supports plain MCZ and WebP+MCZ polyglot).
 pub fn read_index(data: &[u8]) -> Result<MCZIndex, ParseError> {
