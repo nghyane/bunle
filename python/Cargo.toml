@@ -1,0 +1,14 @@
+[package]
+name = "bunle-py"
+version = "0.1.0"
+edition = "2021"
+description = "Python bindings for Bunle"
+
+[lib]
+name = "bunle"
+crate-type = ["cdylib"]
+
+[dependencies]
+bunle = { path = ".." }
+pyo3 = { version = "0.22", features = ["extension-module"] }
+memmap2 = "0.9"
