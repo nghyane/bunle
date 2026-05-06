@@ -50,13 +50,10 @@ enum Command {
         #[arg(short, long)]
         output: PathBuf,
     },
-    /// Validate a BNL archive: structure + decode probe every page
+    /// Validate a BNL archive: structural check (header + index bounds + dims)
     Validate {
         /// BNL file
         file: PathBuf,
-        /// Emit JSON report instead of human-readable text
-        #[arg(long)]
-        json: bool,
     },
 }
 
@@ -68,7 +65,7 @@ fn main() {
         Command::Info { file, json } => cmd_info(&file, json),
         Command::Extract { file, page, output } => cmd_extract(&file, page, &output),
         Command::Unpack { file, output } => cmd_unpack(&file, &output),
-        Command::Validate { file, json } => cmd_validate(&file, json),
+        Command::Validate { file } => cmd_validate(&file),
     }
 }
 
@@ -176,32 +173,20 @@ fn cmd_unpack(file: &PathBuf, output: &PathBuf) {
     }
 }
 
-fn cmd_validate(file: &PathBuf, json: bool) {
+fn cmd_validate(file: &PathBuf) {
     let data = match std::fs::read(file) {
         Ok(d) => d,
         Err(e) => { eprintln!("error: {e}"); std::process::exit(1); }
     };
     match bunle::validate(&data) {
         Ok(report) => {
-            if json {
-                println!(
-                    "{{\"ok\":true,\"version\":{},\"page_count\":{},\"total_bytes\":{}}}",
-                    report.version, report.page_count, report.total_bytes
-                );
-            } else {
-                println!(
-                    "OK — BNL v{}, {} pages, {} bytes",
-                    report.version, report.page_count, report.total_bytes
-                );
-            }
+            println!(
+                "OK — BNL v{}, {} pages, {} bytes",
+                report.version, report.page_count, report.total_bytes
+            );
         }
         Err(e) => {
-            if json {
-                let msg = e.to_string().replace('\\', "\\\\").replace('"', "\\\"");
-                println!("{{\"ok\":false,\"error\":\"{msg}\"}}");
-            } else {
-                eprintln!("error: {e}");
-            }
+            eprintln!("error: {e}");
             std::process::exit(1);
         }
     }

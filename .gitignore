@@ -1,8 +1,13 @@
 /target
+python/target
 *.mcz
+*.bnl
 .DS_Store
 .wrangler/
 node_modules/
 POST.md
-
+__pycache__/
+*.so
+*.pyd
+dist/
 site/dist/
