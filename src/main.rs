@@ -39,6 +39,14 @@ enum Command {
         #[arg(short, long)]
         output: PathBuf,
     },
+    /// Unpack all pages from BNL into a directory
+    Unpack {
+        /// BNL file
+        file: PathBuf,
+        /// Output directory (created if missing)
+        #[arg(short, long)]
+        output: PathBuf,
+    },
 }
 
 fn main() {
@@ -48,6 +56,7 @@ fn main() {
         Command::Pack { dir, output, quality, no_cover } => cmd_pack(&dir, &output, quality, !no_cover),
         Command::Info { file } => cmd_info(&file),
         Command::Extract { file, page, output } => cmd_extract(&file, page, &output),
+        Command::Unpack { file, output } => cmd_unpack(&file, &output),
     }
 }
 
@@ -106,6 +115,19 @@ fn cmd_extract(file: &PathBuf, page: usize, output: &PathBuf) {
             }
             let info = &index.pages[page];
             println!("Extracted page {} ({}×{} {}) → {}", page, info.width, info.height, info.format, output.display());
+        }
+        Err(e) => { eprintln!("error: {e}"); std::process::exit(1); }
+    }
+}
+
+fn cmd_unpack(file: &PathBuf, output: &PathBuf) {
+    let data = match std::fs::read(file) {
+        Ok(d) => d,
+        Err(e) => { eprintln!("error: {e}"); std::process::exit(1); }
+    };
+    match bunle::unpack(&data, output) {
+        Ok(index) => {
+            println!("Unpacked {} pages → {}", index.pages.len(), output.display());
         }
         Err(e) => { eprintln!("error: {e}"); std::process::exit(1); }
     }

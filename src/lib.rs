@@ -1,8 +1,10 @@
 mod format;
 mod pack;
+mod unpack;
 
 pub use format::{ImageFormat, MCZIndex, PageInfo, ParseError, HEADER_SIZE, INDEX_ENTRY_SIZE, COVER_PREFIX};
 pub use pack::{EncodedPage, pack};
+pub use unpack::{unpack, UnpackError};
 #[cfg(feature = "cli")]
 pub use pack::{pack_dir, PackError};
 
